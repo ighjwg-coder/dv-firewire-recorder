@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Stand-in for dvgrab: prints status lines like a tapeless REC session."""
+import os
 import sys
 import time
 
@@ -14,4 +15,10 @@ for ln in lines:
     sys.stdout.write(ln + "\r\n" if "MiB" in ln else ln + "\n")
     sys.stdout.flush()
     time.sleep(0.05)
+if os.environ.get("FAKE_DVGRAB_HOLD"):
+    try:
+        while True:  # keep "recording" until SIGINT, like dvgrab
+            time.sleep(0.05)
+    except KeyboardInterrupt:
+        sys.exit(0)
 sys.exit(1)  # simulate camera unplug

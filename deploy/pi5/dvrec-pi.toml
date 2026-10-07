@@ -1,0 +1,18 @@
+# Raspberry Pi 5 녹화 박스 설정 (/etc/dvrec.toml)
+[record]
+out_dir = "/srv/dv-captures"   # USB SSD를 마운트했다면 그 경로로 변경
+mode = "tapeless"              # tapeless: 캠코더 REC 연동 / manual: 패널 REC 버튼 / continuous
+format = "dv"
+name_time = "system"           # Pi는 RTC 배터리가 없으면 네트워크 없이 시계가 틀릴 수 있음
+prefix = "clip-"
+min_free_gb = 2.0
+daily_folder = true
+
+[panel]
+display = "oled"               # oled | console | none
+driver = "ssd1306"             # 1.3인치 모듈은 대개 sh1106
+i2c_port = 1
+i2c_address = 0x3C
+btn_rec = 17                   # BCM 핀 번호 (버튼 다른 쪽은 GND)
+btn_page = 27
+btn_select = 22

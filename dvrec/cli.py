@@ -13,21 +13,28 @@ from pathlib import Path
 from . import __version__
 from .checks import run_checks
 from .devices import list_devices
+from .panel import Panel, PanelConfig
 from .recorder import FORMATS, Recorder, RecordConfig, build_command, write_status
 
 
-def _load_config(path: Path | None) -> RecordConfig:
-    cfg = RecordConfig()
-    if not path:
-        return cfg
-    data = tomllib.loads(path.read_text()).get("record", {})
-    names = {f.name for f in dataclasses.fields(RecordConfig)}
-    unknown = set(data) - names
+def _fill(obj, section: dict, name: str):
+    names = {f.name for f in dataclasses.fields(obj)}
+    unknown = set(section) - names
     if unknown:
-        raise SystemExit(f"설정 파일에 알 수 없는 키: {', '.join(sorted(unknown))}")
-    for key, value in data.items():
-        setattr(cfg, key, Path(value) if key == "out_dir" else value)
-    return cfg
+        raise SystemExit(f"설정 파일 [{name}]에 알 수 없는 키: {', '.join(sorted(unknown))}")
+    for key, value in section.items():
+        setattr(obj, key, Path(value) if key == "out_dir" else value)
+    return obj
+
+
+def _load_config(path: Path | None) -> RecordConfig:
+    data = tomllib.loads(path.read_text()) if path else {}
+    return _fill(RecordConfig(), data.get("record", {}), "record")
+
+
+def _load_panel_config(path: Path | None) -> PanelConfig:
+    data = tomllib.loads(path.read_text()) if path else {}
+    return _fill(PanelConfig(display="none"), data.get("panel", {}), "panel")
 
 
 def cmd_devices(_args) -> int:
@@ -76,6 +83,14 @@ def cmd_record(args) -> int:
 
     rec = Recorder(cfg, on_event=on_event)
 
+    panel_cfg = _load_panel_config(args.config)
+    if args.panel:
+        panel_cfg.display = args.panel
+    panel = None
+    if panel_cfg.display != "none":
+        panel = Panel(rec, panel_cfg)
+        panel.start()
+
     def handle(signum, _frame):
         logging.getLogger("dvrec").info("종료 요청 (signal %s) — 파일을 닫는 중...", signum)
         rec.stop()
@@ -86,13 +101,19 @@ def cmd_record(args) -> int:
     print(f"dvrec {__version__} — mode={cfg.mode} format={cfg.format} → {cfg.resolved_out_dir()}")
     if cfg.mode == "tapeless":
         print("캠코더를 카메라 모드로 두고 REC 버튼을 누르면 녹화됩니다. 종료: Ctrl+C")
-    return rec.run()
+    elif cfg.mode == "manual":
+        print("패널 REC 버튼으로 녹화 시작/정지. 종료: Ctrl+C")
+    try:
+        return rec.run()
+    finally:
+        if panel:
+            panel.stop()
 
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="dvrec", description="FireWire DV/HDV 테이프리스 레코더")
     p.add_argument("--version", action="version", version=__version__)
-    p.add_argument("-c", "--config", type=Path, help="TOML 설정 파일 ([record] 섹션)")
+    p.add_argument("-c", "--config", type=Path, help="TOML 설정 파일 ([record], [panel] 섹션)")
     p.add_argument("-v", "--verbose", action="store_true", help="dvgrab 진행 로그까지 출력")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -102,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("record", help="녹화 시작")
     r.set_defaults(func=cmd_record)
     r.add_argument("-o", "--out-dir", dest="out_dir", type=Path)
-    r.add_argument("-m", "--mode", choices=["tapeless", "continuous"])
+    r.add_argument("-m", "--mode", choices=["tapeless", "manual", "continuous"])
     r.add_argument("-f", "--format", choices=sorted(FORMATS))
     r.add_argument("--name-time", dest="name_time", choices=["system", "camera"])
     r.add_argument("--prefix")
@@ -114,6 +135,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--dvgrab", help="dvgrab 실행 파일 경로")
     r.add_argument("--status-file", type=Path)
     r.add_argument("--no-daily-folder", action="store_true")
+    r.add_argument("--panel", choices=["oled", "console", "none"],
+                   help="전면 패널 표시 (Raspberry Pi OLED / 콘솔)")
 
     args = p.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,

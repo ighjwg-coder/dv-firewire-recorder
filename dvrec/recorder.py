@@ -33,7 +33,8 @@ _LINE_SPLIT = re.compile(rb"[\r\n]")
 @dataclass
 class RecordConfig:
     out_dir: Path = Path("~/dv-captures")
-    mode: str = "tapeless"        # tapeless: REC 버튼 연동 / continuous: 들어오는 스트림 전부
+    mode: str = "tapeless"        # tapeless: 캠코더 REC 연동 / manual: 패널 버튼으로 시작·정지
+                                  # continuous: 들어오는 스트림 전부
     format: str = "dv"
     name_time: str = "system"     # system: PC 시계 / camera: 카메라 녹화일시
     prefix: str = "clip-"
@@ -67,6 +68,9 @@ def build_command(cfg: RecordConfig, basename: Path) -> list[str]:
         # -r: 카메라가 REC 상태일 때만 저장, -a: REC 누를 때마다 새 파일
         # -noavc: 카메라 모드에서 AV/C play/stop 명령을 보내지 않음
         cmd += ["-r", "-a", "-noavc"]
+    elif cfg.mode == "manual":
+        # 테이프 없이 카메라 모드 출력을 그대로 저장, 시작/정지는 dvrec이 제어
+        cmd += ["-a", "-noavc"]
     elif cfg.mode == "continuous":
         cmd += ["-a"]
     else:
@@ -89,11 +93,31 @@ class Recorder:
         self._stop = threading.Event()
         self._proc: subprocess.Popen | None = None
         self._lock = threading.Lock()
+        self._armed = threading.Event()
+        self._wake = threading.Event()
 
     # ---- public -------------------------------------------------------
     def stop(self) -> None:
         self._stop.set()
+        self._wake.set()
         self._interrupt_child()
+
+    @property
+    def armed(self) -> bool:
+        return self._armed.is_set()
+
+    def toggle_record(self) -> bool:
+        """manual 모드에서 녹화 시작/정지. 다른 모드에서는 False."""
+        if self.cfg.mode != "manual":
+            log.info("REC 버튼은 manual 모드에서만 동작합니다 (현재: %s)", self.cfg.mode)
+            return False
+        if self._armed.is_set():
+            self._armed.clear()
+            self._interrupt_child()
+        else:
+            self._armed.set()
+            self._wake.set()
+        return True
 
     def run(self) -> int:
         out = self.cfg.resolved_out_dir()
@@ -103,6 +127,13 @@ class Recorder:
                         "전달되지 않을 수 있습니다. 먼저 테스트하세요.")
 
         while not self._stop.is_set():
+            if self.cfg.mode == "manual" and not self._armed.is_set():
+                if self.state.state != "standby":
+                    self._set("standby", None)
+                self._wake.wait(0.5)
+                self._wake.clear()
+                continue
+
             target = self._target_dir(out)
             if free_gb(target) < self.cfg.min_free_gb:
                 self._set("error", f"디스크 여유공간 부족 (< {self.cfg.min_free_gb} GB)")
@@ -114,6 +145,9 @@ class Recorder:
             code = self._run_once(cmd, target)
             if self._stop.is_set():
                 break
+            if self.cfg.mode == "manual" and not self._armed.is_set():
+                self.state.rec_since = None
+                continue  # 사용자가 정지함
             log.warning("dvgrab 종료 (code %s). %.0f초 후 재시작 — 카메라 연결/전원을 확인하세요.",
                         code, self.cfg.retry_delay)
             self._set("waiting", "카메라 대기 중")
@@ -166,6 +200,10 @@ class Recorder:
         if not line.strip():
             return
         ev = apply_line(self.state, line)
+        if ev in ("started", "clip") and self.state.rec_since is None:
+            self.state.rec_since = time.monotonic()
+        elif ev in ("stopped", "error"):
+            self.state.rec_since = None
         if ev == "progress":
             log.debug(line.strip())
         elif ev:
@@ -197,6 +235,8 @@ class Recorder:
             proc.kill()
 
     def _set(self, state: str, message: str | None) -> None:
+        if state != "recording":
+            self.state.rec_since = None
         self.state.state = state
         self.state.message = message
         if message:

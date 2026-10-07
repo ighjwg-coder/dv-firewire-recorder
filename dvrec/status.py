@@ -14,7 +14,7 @@ _FILE_RE = re.compile(
 
 @dataclass
 class RecorderState:
-    state: str = "idle"          # idle | waiting | recording | paused | error | stopped
+    state: str = "idle"          # idle | standby | waiting | recording | paused | error | stopped
     file: str | None = None
     size_mib: float = 0.0
     frames: int = 0
@@ -22,6 +22,7 @@ class RecorderState:
     date: str | None = None
     clips: list[str] = field(default_factory=list)
     message: str | None = None
+    rec_since: float | None = None   # time.monotonic() 녹화 시작 시각
 
     def to_dict(self) -> dict:
         return asdict(self)
