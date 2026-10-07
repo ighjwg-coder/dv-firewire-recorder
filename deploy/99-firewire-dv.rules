@@ -1,0 +1,4 @@
+# AV/C 캠코더(/dev/fw*)를 video 그룹이 읽고 쓸 수 있게 허용
+# 설치: sudo cp deploy/99-firewire-dv.rules /etc/udev/rules.d/ && sudo udevadm control --reload && sudo udevadm trigger
+# 사용자 추가: sudo usermod -aG video $USER  (재로그인 필요)
+SUBSYSTEM=="firewire", ATTR{units}=="*0x00a02d:0x010001*", GROUP="video", MODE="0660"

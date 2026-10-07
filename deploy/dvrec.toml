@@ -1,0 +1,12 @@
+# dvrec 설정 예시 — dvrec -c deploy/dvrec.toml record
+[record]
+out_dir = "/srv/dv-captures"   # 저장 위치
+mode = "tapeless"              # tapeless: 캠코더 REC 연동 / continuous: 스트림 전부 저장(테이프 캡처)
+format = "dv"                  # dv | avi | mov | dif | hdv
+name_time = "system"           # system: PC 시계 / camera: 카메라 녹화일시
+prefix = "clip-"
+split_size_mib = 0             # FAT32 디스크면 4000
+min_free_gb = 2.0              # 이보다 적으면 녹화 중지
+retry_delay = 3.0              # 카메라 끊김 시 재시도 간격(초)
+daily_folder = true            # 날짜별 폴더 생성
+# guid = "08004601xxxxxxxx"    # 카메라 여러 대일 때

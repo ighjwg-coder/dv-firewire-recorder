@@ -1,0 +1,17 @@
+# 부팅 시 자동 녹화 대기 (현장용 헤드리스 박스)
+# 설치: sudo cp deploy/dvrec.service /etc/systemd/system/ && sudo systemctl enable --now dvrec
+[Unit]
+Description=FireWire DV tapeless recorder
+After=local-fs.target
+
+[Service]
+User=dvrec
+Group=video
+ExecStart=/usr/local/bin/dvrec -c /etc/dvrec.toml record
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target
