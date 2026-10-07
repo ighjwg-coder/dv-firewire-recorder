@@ -97,6 +97,7 @@ dvrec -c deploy/dvrec.toml record
 | `--name-time` | `system` | 파일명 시간: `system`(PC 시계) / `camera`(카메라 녹화일시) |
 | `--split-size` | `0` | MiB 단위 파일 분할 (FAT32면 `4000`) |
 | `--min-free-gb` | `2.0` | 여유공간 하한 |
+| `--pulldown` | `none` | `24p` / `24pa`: 녹화하면서 풀다운 제거 (`-f mov` 전용) |
 | `--guid` | | 카메라가 여러 대일 때 지정 |
 | `--no-daily-folder` | | 날짜 폴더 생성 안 함 |
 | `-v` | | dvgrab 진행 로그까지 출력 |
@@ -107,7 +108,33 @@ dvrec -c deploy/dvrec.toml record
 - **`avi`**: 구형 윈도우 NLE 호환용
 - **`hdv`**: HDV 캠코더(1080i MPEG-2 TS). Premiere에서 바로 열림
 
-## 5. 헤드리스 녹화 박스 (부팅 시 자동 대기)
+## 5. Panasonic AG-DVX100B
+
+프리셋: `dvrec -c deploy/dvx100b.toml record`
+
+### 연결
+- 카메라 뒷면 **DV 단자(4핀)** ↔ PC FireWire 포트
+- NTSC 720×480, 29.97fps, DV25 (≈ 13GB/시간)
+
+### 촬영 모드별 저장 방법
+
+| 카메라 모드 | 실제 기록 | 권장 저장 방법 |
+|---|---|---|
+| 60i | 59.94i 인터레이스 | `-f dv` (기본) |
+| 30P | 29.97p (60i 안에 프로그레시브) | `-f dv` |
+| 24P (표준, 2:3 풀다운) | 59.94i 안에 23.976p | `-f dv` → 편집 시 풀다운 제거, 또는 `-f mov --pulldown 24p` |
+| **24P Advanced** (2:3:3:2) | 59.94i 안에 23.976p | `-f dv` → Premiere에서 제거 **또는** `-f mov --pulldown 24pa`로 녹화 단계에서 제거 |
+
+- **원본 보존이 우선이면 `-f dv`**를 권장합니다. Premiere Pro: 클립 우클릭 → *Modify → Interpret Footage* → **Remove 24p DV Pulldown** 체크
+- 바로 23.976p 타임라인에 올리고 싶으면 `dvrec record -f mov --pulldown 24pa`
+
+### 녹화 전 확인할 것 (실기 테스트 필요)
+1. **테이프를 넣고 테스트하세요.** 테이프리스 모드(`-r`)는 DV 스트림 속 "녹화 중" 표시를 보고 동작하는데, 이 표시는 캠코더가 실제로 녹화 상태가 되어야 켜집니다. 테이프가 없으면 REC 버튼이 동작하지 않을 수 있습니다. 이 경우 테이프와 디스크에 **동시에 기록**되니 테이프가 백업 역할을 합니다.
+2. 테이프 없이 녹화하려면 `-m continuous`로 저장하면 됩니다. 들어오는 영상을 전부 기록하고, PC 쪽에서 시작과 종료를 직접 조작합니다.
+3. 오디오는 카메라 메뉴에서 **48kHz/16bit**로 설정하세요. 32kHz 모드도 캡처는 되지만, 편집할 때 샘플레이트 변환이 생깁니다.
+4. 16:9(스퀴즈)로 찍었다면 Premiere에서 픽셀 종횡비를 *D1/DV NTSC Widescreen (1.2121)*로 지정하세요.
+
+## 6. 헤드리스 녹화 박스 (부팅 시 자동 대기)
 
 ```bash
 sudo useradd -r -G video -m dvrec
@@ -120,7 +147,7 @@ journalctl -u dvrec -f        # 로그 확인
 
 PC를 켜고 캠코더를 연결하면 바로 녹화 대기 상태가 되고, 모니터 없이 REC 버튼만으로 운용할 수 있습니다.
 
-## 6. 문제 해결
+## 7. 문제 해결
 
 | 증상 | 원인 / 조치 |
 |---|---|
@@ -131,7 +158,7 @@ PC를 켜고 캠코더를 연결하면 바로 녹화 대기 상태가 되고, �
 | 프레임 드롭 / 끊김 | TI 칩셋 카드로 교체, USB 허브 경유 외장디스크 피하기, 절전(USB autosuspend) 끄기 |
 | `Permission denied` | udev 규칙 설치 + `video` 그룹 추가 후 재로그인 |
 
-## 7. 개발
+## 8. 개발
 
 ```bash
 python3 -m unittest discover -s tests -t . -v

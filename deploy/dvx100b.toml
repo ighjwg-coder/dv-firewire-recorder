@@ -1,0 +1,14 @@
+# Panasonic AG-DVX100B 프리셋 — dvrec -c deploy/dvx100b.toml record
+# 카메라 쪽: 오디오 48kHz 설정, 테이프 삽입 상태에서 REC (README 'DVX100B' 항목 참고)
+[record]
+out_dir = "~/dv-captures/dvx100b"
+mode = "tapeless"
+format = "dv"            # 원본 그대로 저장. 24PA는 Premiere 'Remove 24p DV Pulldown'으로 처리
+name_time = "system"
+prefix = "dvx100b-"
+pulldown = "none"
+min_free_gb = 2.0
+
+# 24P Advanced로 찍고 녹화하면서 바로 23.976p로 만들고 싶을 때:
+# format = "mov"
+# pulldown = "24pa"

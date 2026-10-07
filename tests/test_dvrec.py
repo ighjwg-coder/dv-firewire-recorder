@@ -63,6 +63,15 @@ class CommandTests(unittest.TestCase):
         self.assertIn("-timestamp", cmd)
         self.assertEqual(cmd[cmd.index("-guid") + 1], "abc")
 
+    def test_pulldown_24pa_mov(self):
+        cmd = build_command(RecordConfig(format="mov", pulldown="24pa"), Path("/x/c-"))
+        self.assertIn("-24pa", cmd)
+        self.assertEqual(cmd[cmd.index("-format") + 1], "qt")
+
+    def test_pulldown_requires_mov(self):
+        with self.assertRaises(ValueError):
+            build_command(RecordConfig(format="dv", pulldown="24pa"), Path("/x/"))
+
     def test_bad_format(self):
         with self.assertRaises(ValueError):
             build_command(RecordConfig(format="mp4"), Path("/x/"))

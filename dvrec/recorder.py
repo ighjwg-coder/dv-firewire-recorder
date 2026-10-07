@@ -43,6 +43,7 @@ class RecordConfig:
     retry_delay: float = 3.0
     dvgrab: str = "dvgrab"
     daily_folder: bool = True
+    pulldown: str = "none"        # none | 24p | 24pa (QuickTime 전용, DVX100 24P 모드)
 
     def resolved_out_dir(self) -> Path:
         return Path(os.path.expanduser(str(self.out_dir))).resolve()
@@ -56,6 +57,12 @@ def build_command(cfg: RecordConfig, basename: Path) -> list[str]:
     cmd.append("-timesys" if cfg.name_time == "system" else "-timestamp")
     if cfg.format == "avi":
         cmd.append("-opendml")
+    if cfg.pulldown != "none":
+        if cfg.pulldown not in ("24p", "24pa"):
+            raise ValueError(f"unknown pulldown: {cfg.pulldown}")
+        if cfg.format != "mov":
+            raise ValueError("pulldown 제거(-24p/-24pa)는 format=mov 에서만 가능합니다")
+        cmd.append(f"-{cfg.pulldown}")
     if cfg.mode == "tapeless":
         # -r: 카메라가 REC 상태일 때만 저장, -a: REC 누를 때마다 새 파일
         # -noavc: 카메라 모드에서 AV/C play/stop 명령을 보내지 않음

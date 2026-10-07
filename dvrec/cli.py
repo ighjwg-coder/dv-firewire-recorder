@@ -13,7 +13,7 @@ from pathlib import Path
 from . import __version__
 from .checks import run_checks
 from .devices import list_devices
-from .recorder import FORMATS, Recorder, RecordConfig, write_status
+from .recorder import FORMATS, Recorder, RecordConfig, build_command, write_status
 
 
 def _load_config(path: Path | None) -> RecordConfig:
@@ -53,7 +53,7 @@ def cmd_check(args) -> int:
 def cmd_record(args) -> int:
     cfg = _load_config(args.config)
     for key in ("out_dir", "mode", "format", "name_time", "prefix", "split_size_mib",
-                "min_free_gb", "guid", "dvgrab"):
+                "min_free_gb", "guid", "dvgrab", "pulldown"):
         value = getattr(args, key)
         if value is not None:
             setattr(cfg, key, value)
@@ -68,6 +68,11 @@ def cmd_record(args) -> int:
             write_status(status_file, st)
         except OSError:
             pass
+
+    try:
+        build_command(cfg, cfg.resolved_out_dir() / cfg.prefix)
+    except ValueError as e:
+        raise SystemExit(f"설정 오류: {e}")
 
     rec = Recorder(cfg, on_event=on_event)
 
@@ -103,6 +108,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--prefix")
     r.add_argument("--split-size", dest="split_size_mib", type=int, metavar="MiB")
     r.add_argument("--min-free-gb", dest="min_free_gb", type=float)
+    r.add_argument("--pulldown", choices=["none", "24p", "24pa"],
+                   help="24P 풀다운 제거 (format=mov 전용)")
     r.add_argument("--guid", help="카메라 여러 대일 때 GUID 지정 (dvrec devices 참고)")
     r.add_argument("--dvgrab", help="dvgrab 실행 파일 경로")
     r.add_argument("--status-file", type=Path)
